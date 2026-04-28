@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, where, updateDoc } from 'firebase/firestore';
 import axios from 'axios';
 
 interface DialogueMessage {
@@ -120,10 +120,8 @@ export const sendMessageToAI = async (
     }
     
     // Update the thinking message with the actual AI response
-    await addDoc(messagesCollection, {
-      sender: "AI",
+    await updateDoc(thinkingDocRef, {
       text: aiResponse,
-      timestamp: serverTimestamp(),
     });
     
     return aiResponse;

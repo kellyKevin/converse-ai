@@ -1,55 +1,65 @@
-import React from 'react';
-import { useRouter } from 'next/navigation';
+import { FC } from "react";
+import Image from "next/image";
+import { UserCircle } from "lucide-react";
+import { Card, CardHeader } from "./ui/card";
+import { formatDistanceToNow } from "date-fns";
 
-interface User {
+interface UserData {
   uid: string;
-  displayName: string;
+  displayName?: string;
   email?: string;
   photoURL?: string;
   profilePictureUrl?: string;
 }
 
 interface ChatTileProps {
-  user: User;
+  user: UserData;
   lastMessage: string;
+  timestamp?: Date;
   onClick: () => void;
   chatId?: string;
 }
 
-const ChatTile: React.FC<ChatTileProps> = ({ user, lastMessage, chatId, onClick }) => {
-  const router = useRouter();
+const ChatTile: FC<ChatTileProps> = ({ user, lastMessage, timestamp, onClick }) => {
+  // Format the timestamp to relative time (e.g., "5 minutes ago", "2 hours ago")
+  const formattedTime = timestamp ? formatDistanceToNow(timestamp, { addSuffix: true }) : "";
 
-  const handleChatClick = () => {
-    if (chatId) {
-      router.push(`/chat/${chatId}`);
-    }
-  };
+  // Use display name or fallback to email if available
+  const displayName = user.displayName || (user.email ? user.email.split('@')[0] : "Unknown User");
 
   return (
-    <div 
-      className="bg-white shadow-md rounded-lg p-4 cursor-pointer hover:shadow-lg transition-shadow"
+    <Card
+      className="bg-white transition-all duration-300 hover:shadow-md cursor-pointer border border-gray-100"
       onClick={onClick}
     >
-      <div className="flex items-center mb-2">
+      <CardHeader className="flex flex-row items-center gap-4 py-3">
         {user.profilePictureUrl ? (
-          <img 
-            src={user.profilePictureUrl} 
-            alt={user.displayName} 
-            className="w-10 h-10 rounded-full mr-3"
-          />
+          <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-full border-2 border-white shadow-sm">
+            <Image
+              src={user.profilePictureUrl}
+              alt={displayName}
+              fill
+              className="object-cover"
+            />
+          </div>
         ) : (
-          <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center mr-3">
-            <span className="text-gray-600 font-bold">
-              {user.displayName?.charAt(0)}
-            </span>
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
+            <UserCircle className="h-7 w-7" />
           </div>
         )}
-        <div>
-          <h3 className="font-semibold">{user.displayName}</h3>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-base font-semibold text-gray-900 truncate">{displayName}</h3>
+            {formattedTime && (
+              <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                {formattedTime}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-500 truncate mt-0.5">{lastMessage}</p>
         </div>
-      </div>
-      <p className="text-gray-600 text-sm truncate">{lastMessage}</p>
-    </div>
+      </CardHeader>
+    </Card>
   );
 };
 

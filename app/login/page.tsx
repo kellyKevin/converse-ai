@@ -4,8 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
-import { firebaseApp } from "@/lib/firebase";
-import { doc, setDoc, getFirestore } from "firebase/firestore";
+import { firebaseApp, addUserToFirestore } from "@/lib/firebase";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState<boolean>(false);
@@ -14,7 +13,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState<string>("");
   const router = useRouter();
   const auth = getAuth(firebaseApp);
-  const db = getFirestore(firebaseApp);
 
   const handleGoogleSignIn = async (): Promise<void> => {
     setError(null);
@@ -23,16 +21,7 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-      const userDocRef = doc(db, 'users', user.uid);
-      await setDoc(userDocRef, {
-        uid: user.uid,
-        displayName: user.displayName,
-        email: user.email,
-        photoURL: user.photoURL,
-        createdAt: new Date(),
-        lastActive: new Date(),
-        profilePictureUrl: user.photoURL
-      }, { merge: true });
+      await addUserToFirestore(user);
       router.push("/dashboard");
     } catch (err: any) {
       console.error("Sign-in error:", err.code, err.message);
@@ -52,16 +41,7 @@ export default function LoginPage() {
       setLoading(true);
       const result = await signInWithEmailAndPassword(auth, email, password);
       const user = result.user;
-      const userDocRef = doc(db, 'users', user.uid);
-      await setDoc(userDocRef, {
-        uid: user.uid,
-        displayName: user.displayName,
-        email: user.email,
-        photoURL: user.photoURL,
-        createdAt: new Date(),
-        lastActive: new Date(),
-        profilePictureUrl: user.photoURL
-      }, { merge: true });
+      await addUserToFirestore(user);
       router.push("/dashboard");
     } catch (err: any) {
       console.error("Sign-in error:", err.code, err.message);
