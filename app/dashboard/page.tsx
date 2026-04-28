@@ -4,8 +4,8 @@ import { useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { SessionContext } from "@/lib/session-context";
-import { db } from '@/lib/firebase';
-import { collection, doc, addDoc, onSnapshot, query, setDoc, orderBy, limit, getDoc } from "firebase/firestore";
+import { db, addUserToFirestore, createNewChat } from '@/lib/firebase';
+import { collection, doc, onSnapshot, query, setDoc, orderBy, limit, getDoc, serverTimestamp } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,21 +56,7 @@ export default function Home() {
     if (!user) return;
 
     const usersCollection = collection(db, "users");
-    const userDocRef = doc(usersCollection, user.uid);
-    const setUserData = async () => {
-      await setDoc(userDocRef, {
-        uid: user.uid,
-        displayName: user.displayName,
-        email: user.email,
-        photoURL: user.photoURL,
-        online: true,
-        createdAt: new Date(),
-        lastActive: new Date(),
-        profilePictureUrl: user.photoURL
-      }, { merge: true });
-    };
-    
-    setUserData();
+    addUserToFirestore(user);
 
     const unsubscribe = onSnapshot(query(usersCollection), (snapshot) => {
       const updatedUsers: UserData[] = snapshot.docs.map((doc) => {
@@ -121,17 +107,7 @@ export default function Home() {
   const startNewChat = async (userId?: string): Promise<void> => {
     if (!user) return;
     
-    const chatsCollection = collection(db, "chats");
-    const participants = [user.uid];
-    if (userId) {
-      participants.push(userId);
-    }
-    const newChatRef = await addDoc(chatsCollection, {
-      participants: participants,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      chatName: `Chat ${Date.now()}`
-    });
+    const newChatRef = await createNewChat(user.uid, userId);
     
     setIsChatStarted(true);
     router.push(`/chat/${newChatRef.id}`);
@@ -145,7 +121,7 @@ export default function Home() {
       // Set user as offline first
       if (user) {
         const userDocRef = doc(collection(db, "users"), user.uid);
-        await setDoc(userDocRef, { online: false, lastActive: new Date() }, { merge: true });
+        await setDoc(userDocRef, { online: false, lastActive: serverTimestamp() }, { merge: true });
       }
       
       // Sign out from Firebase

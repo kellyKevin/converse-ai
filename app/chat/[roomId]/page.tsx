@@ -3,11 +3,13 @@
 import { useContext, useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { SessionContext } from "@/lib/session-context";
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, doc, getDoc, addDoc, orderBy, serverTimestamp } from "firebase/firestore";
+import { db, addMessageToFirestore } from '@/lib/firebase';
+import { collection, onSnapshot, query, doc, getDoc, orderBy } from "firebase/firestore";
 import ChatMessage from "@/components/ChatMessage";
 import RoomHeader from "@/components/RoomHeader";
 import AIChatModal from "@/components/AIChatModal";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { Send, Sparkles } from "lucide-react";
 
 interface MessageData {
   messageId: string;
@@ -18,13 +20,12 @@ interface MessageData {
 
 export default function ChatRoomPage() {
   const params = useParams();
-  // Fix: ensure consistent parameter naming - convert to string and lowercase for consistency
-  const roomId = (params.roomId || params.roomid) as string;
+  const roomId = params.roomId as string;
   
   const { user, loading } = useContext(SessionContext);
   const [messages, setMessages] = useState<MessageData[]>([]);
   const [roomName, setRoomName] = useState<string>("");
-  const [otherUser, setOtherUser] = useState<{ username?: string; email: string } | null>(null);
+  const [otherUser, setOtherUser] = useState<{ uid?: string; displayName?: string; email: string; profilePictureUrl?: string } | null>(null);
   const [newMessage, setNewMessage] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isAIChatOpen, setIsAIChatOpen] = useState<boolean>(false);
@@ -55,20 +56,18 @@ export default function ChatRoomPage() {
               const userDoc = await getDoc(userDocRef);
               
               const otherUserData = userDoc.data();
-              const otherUser: { displayName?: string; email: string } = {
+              const otherUserObj = {
+                uid: otherParticipantId,
                 displayName: otherUserData?.displayName,
-                email: otherUserData?.email || "No Email", // Fallback in case email is missing
+                email: otherUserData?.email || "No Email",
+                profilePictureUrl: otherUserData?.profilePictureUrl
               };
 
-              setOtherUser(otherUser);
-              console.log("Other User:", otherUser);
+              setOtherUser(otherUserObj);
             } else {
-              // Handle group chats or cases with no other participant differently
-              setOtherUser({ email: "Group Chat" }); // Example handling
-              console.log("Group Chat or No Other User");
+              setOtherUser({ email: "Group Chat" });
             }
 
-            //For now just set room name as chat name
             setRoomName(chatData.chatName || "Chat Room");
 
           } else {
@@ -114,11 +113,10 @@ export default function ChatRoomPage() {
     if (!newMessage.trim() || !user || !roomId) return;
     
     try {
-      const messagesCollection = collection(db, `chats/${roomId}/messages`);
-      await addDoc(messagesCollection, {
+      await addMessageToFirestore(roomId, {
         senderId: user.uid,
+        receiverId: otherUser?.uid,
         text: newMessage,
-        timestamp: serverTimestamp(), // Use serverTimestamp for more accurate timing
       });
       
       setNewMessage("");
@@ -135,7 +133,12 @@ export default function ChatRoomPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
+        <LoadingSpinner size={40} />
+        <p className="mt-4 text-gray-500 font-medium">Loading your conversation...</p>
+      </div>
+    );
   }
 
   if (!user) {
@@ -147,15 +150,18 @@ export default function ChatRoomPage() {
       <RoomHeader otherUser={otherUser || {email: "Unknown"}} />
       
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mx-4 mt-2">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mx-4 mt-2 shadow-sm">
           {error}
         </div>
       )}
       
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
         {messages.length === 0 ? (
-          <div className="text-center text-gray-500 my-8">
-            No messages yet. Start the conversation!
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
+            <div className="h-16 w-16 bg-gray-100 rounded-full flex items-center justify-center">
+               <Sparkles className="h-8 w-8" />
+            </div>
+            <p className="font-medium">No messages yet. Start the conversation!</p>
           </div>
         ) : (
           messages.map((message) => (
@@ -163,37 +169,42 @@ export default function ChatRoomPage() {
               key={message.messageId}
               message={message.text}
               isUser={message.senderId === user?.uid}
+              timestamp={message.timestamp}
             />
           ))
         )}
         <div ref={messagesEndRef} />
       </div>
       
-      <div className="border-t p-4 bg-white">
-        <div className="flex space-x-2">
+      <div className="border-t border-gray-100 p-4 bg-white shadow-[0_-1px_3px_rgba(0,0,0,0.02)]">
+        <div className="max-w-4xl mx-auto flex items-center gap-2">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Type your message..."
+            className="flex-1 px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-purple-200 transition-all outline-none text-gray-900 placeholder-gray-400"
             onKeyPress={(e) => {
               if (e.key === 'Enter') {
                 handleSendMessage();
               }
             }}
           />
-          <button
-            onClick={handleSendMessage}
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-          >
-            Send
-          </button>
+
           <button
             onClick={handleOpenAiChat}
-            className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600"
+            className="p-3 text-purple-600 hover:bg-purple-50 rounded-xl transition-colors"
+            title="Get AI help"
           >
-            Ask AI
+            <Sparkles className="h-6 w-6" />
+          </button>
+
+          <button
+            onClick={handleSendMessage}
+            disabled={!newMessage.trim()}
+            className="p-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all disabled:opacity-50 disabled:grayscale"
+          >
+            <Send className="h-6 w-6" />
           </button>
         </div>
       </div>
